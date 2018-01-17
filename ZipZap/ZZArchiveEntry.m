@@ -179,4 +179,17 @@
 	return (id _Nonnull)nil;
 }
 
+//디렉토리 여부 판별
+- (BOOL)isDirectory {
+	const uint8_t *namebytes = [self.rawFileName bytes];
+	NSUInteger namelength = [self.rawFileName length];
+
+	if (namebytes[namelength-1]=='/' &&
+		self.uncompressedSize == 0) {
+		return YES;
+	}
+	else
+		return NO;
+}
+
 @end

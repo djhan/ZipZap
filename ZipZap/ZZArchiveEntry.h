@@ -97,6 +97,9 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @property (readonly, nonatomic) NSStringEncoding encoding;
 
+//디렉토리 여부 판별
+- (BOOL)isDirectory;
+
 /**
  * Creates a new file entry from a streaming callback.
  *
