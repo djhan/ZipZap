@@ -78,7 +78,7 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 	if ((self = [super init]))
 	{
 		_channel = channel;
-
+		
 		NSNumber* createIfMissing = options[ZZOpenOptionsCreateIfMissingKey];
 		if (![self loadCanMiss:createIfMissing.boolValue error:error])
 			return nil;
@@ -105,7 +105,7 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 		else
 			return ZZRaiseErrorNo(error, ZZOpenReadErrorCode, @{NSUnderlyingErrorKey : readError});
 	}
-
+	
 	// search for the end of directory signature in last 64K of file
 	const uint8_t* beginContent = (const uint8_t*)contents.bytes;
 	const uint8_t* endContent = beginContent + contents.length;
@@ -126,17 +126,42 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 		|| endOfCentralDirectoryRecord->numberOfThisDisk != 0
 		|| endOfCentralDirectoryRecord->numberOfTheDiskWithTheStartOfTheCentralDirectory != 0
 		|| endOfCentralDirectoryRecord->totalNumberOfEntriesInTheCentralDirectoryOnThisDisk
-			!= endOfCentralDirectoryRecord->totalNumberOfEntriesInTheCentralDirectory
+		!= endOfCentralDirectoryRecord->totalNumberOfEntriesInTheCentralDirectory
 		// central directory occurs before end of central directory, and has enough minimal space for the given entries
 		|| beginContent
-			+ endOfCentralDirectoryRecord->offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber
-			+ endOfCentralDirectoryRecord->totalNumberOfEntriesInTheCentralDirectory * sizeof(ZZCentralFileHeader)
-			> endOfCentralDirectory
+		+ endOfCentralDirectoryRecord->offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber
+		+ endOfCentralDirectoryRecord->totalNumberOfEntriesInTheCentralDirectory * sizeof(ZZCentralFileHeader)
+		> endOfCentralDirectory
 		// end of central directory occurs at actual end of the zip
 		|| endContent
-			!= endOfCentralDirectory + sizeof(ZZEndOfCentralDirectory) + endOfCentralDirectoryRecord->zipFileCommentLength)
+		!= endOfCentralDirectory + sizeof(ZZEndOfCentralDirectory) + endOfCentralDirectoryRecord->zipFileCommentLength) {
+		
+		if (endOfCentralDirectory == endRangeEndOfCentralDirectory) {
+			NSLog(@"ZipZap>ZZArchive>loadCanMiss: central directory signature 발견 실패");
+		}
+		if (beginContent
+			+ endOfCentralDirectoryRecord->offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber
+			+ endOfCentralDirectoryRecord->totalNumberOfEntriesInTheCentralDirectory * sizeof(ZZCentralFileHeader)
+			> endOfCentralDirectory) {
+			NSLog(@"ZipZap>ZZArchive>loadCanMiss: central directory occurs before end of central directory, and has enough minimal space for the given entries");
+		}
+		//2018/01/22 수정
+		//전체 길이가 central directory의 끝보다 작은 경우에만 에러 발생
+		//향후 어떤 에러가 발생할지 지켜볼 필요 있음
+		if (endContent
+			//!= endOfCentralDirectory + sizeof(ZZEndOfCentralDirectory) + endOfCentralDirectoryRecord->zipFileCommentLength) {
+			< endOfCentralDirectory + sizeof(ZZEndOfCentralDirectory) + endOfCentralDirectoryRecord->zipFileCommentLength) {
+			/*
+			 NSLog(@"ZipZap>ZZArchive>loadCanMiss: endContent = %li", (NSInteger)endContent);
+			 NSLog(@"ZipZap>ZZArchive>loadCanMiss: endOfCentralDirectory = %li", (NSInteger)endOfCentralDirectory);
+			 NSLog(@"ZipZap>ZZArchive>loadCanMiss: sizeof(ZZEndOfCentralDirectory) = %lu", sizeof(ZZEndOfCentralDirectory));
+			 NSLog(@"ZipZap>ZZArchive>loadCanMiss: endOfCentralDirectoryRecord->zipFileCommentLength = %i", endOfCentralDirectoryRecord->zipFileCommentLength);*/
+			NSLog(@"ZipZap>ZZArchive>loadCanMiss: end of central directory occurs at actual end of the zip");
+		}
+		
 		return ZZRaiseErrorNo(error, ZZEndOfCentralDirectoryReadErrorCode, nil);
-			
+	}
+	
 	// add an entry for each central header in the sequence
 	ZZCentralFileHeader* nextCentralFileHeader = (ZZCentralFileHeader*)(beginContent
 																		+ endOfCentralDirectoryRecord->offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber);
@@ -151,11 +176,11 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 			|| nextCentralFileHeader->diskNumberStart != 0
 			// local file occurs before first central file header, and has enough minimal space for at least local file
 			|| nextCentralFileHeader->relativeOffsetOfLocalHeader + sizeof(ZZLocalFileHeader)
-				> endOfCentralDirectoryRecord->offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber
+			> endOfCentralDirectoryRecord->offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber
 			// next central file header in sequence is within the central directory
 			|| (const uint8_t*)nextCentralFileHeader->nextCentralFileHeader() > endOfCentralDirectory)
 			return ZZRaiseErrorNo(error, ZZCentralFileHeaderReadErrorCode, @{ZZEntryIndexKey : @(index)});
-								
+		
 		ZZLocalFileHeader* nextLocalFileHeader = (ZZLocalFileHeader*)(beginContent
 																	  + nextCentralFileHeader->relativeOffsetOfLocalHeader);
 		
@@ -184,17 +209,17 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 	
 	// get an entry writer for each new entry
 	NSMutableArray<id<ZZArchiveEntryWriter>>* newEntryWriters = [NSMutableArray array];
-    
-    [newEntries enumerateObjectsUsingBlock:^(ZZArchiveEntry *anEntry, NSUInteger index, BOOL* stop)
-     {
-         [newEntryWriters addObject:[anEntry newWriterCanSkipLocalFile:index < skipIndex]];
-     }];
+	
+	[newEntries enumerateObjectsUsingBlock:^(ZZArchiveEntry *anEntry, NSUInteger index, BOOL* stop)
+	 {
+		 [newEntryWriters addObject:[anEntry newWriterCanSkipLocalFile:index < skipIndex]];
+	 }];
 	
 	// skip the initial matching entries
 	uint32_t initialSkip = skipIndex > 0 ? [newEntryWriters[skipIndex - 1] offsetToLocalFileEnd] : 0;
-
+	
 	NSError* __autoreleasing underlyingError;
-
+	
 	// create a temp channel for all output
 	id<ZZChannel> temporaryChannel = [_channel temporaryChannel:&underlyingError];
 	if (!temporaryChannel)
@@ -207,32 +232,32 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 		if (!temporaryChannelOutput)
 			return ZZRaiseErrorNo(error, ZZOpenWriteErrorCode, @{NSUnderlyingErrorKey : underlyingError});
 		ZZScopeGuard temporaryChannelOutputCloser(^{[temporaryChannelOutput close];});
-	
+		
 		// write out local files
 		for (NSUInteger index = skipIndex; index < newEntriesCount; ++index)
 			if (![newEntryWriters[index] writeLocalFileToChannelOutput:temporaryChannelOutput
-																	  withInitialSkip:initialSkip
-																				error:&underlyingError])
+													   withInitialSkip:initialSkip
+																 error:&underlyingError])
 				return ZZRaiseErrorNo(error, ZZLocalFileWriteErrorCode, @{NSUnderlyingErrorKey : underlyingError, ZZEntryIndexKey : @(index)});
 		
 		ZZEndOfCentralDirectory endOfCentralDirectory;
 		endOfCentralDirectory.signature = ZZEndOfCentralDirectory::sign;
 		endOfCentralDirectory.numberOfThisDisk
-			= endOfCentralDirectory.numberOfTheDiskWithTheStartOfTheCentralDirectory
-			= 0;
+		= endOfCentralDirectory.numberOfTheDiskWithTheStartOfTheCentralDirectory
+		= 0;
 		endOfCentralDirectory.totalNumberOfEntriesInTheCentralDirectoryOnThisDisk
-			= endOfCentralDirectory.totalNumberOfEntriesInTheCentralDirectory
-			= newEntriesCount;
+		= endOfCentralDirectory.totalNumberOfEntriesInTheCentralDirectory
+		= newEntriesCount;
 		endOfCentralDirectory.offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber = [temporaryChannelOutput offset] + initialSkip;
 		
 		// write out central file headers
 		for (NSUInteger index = 0; index < newEntriesCount; ++index)
 			if (![newEntryWriters[index] writeCentralFileHeaderToChannelOutput:temporaryChannelOutput
-																						error:&underlyingError])
+																		 error:&underlyingError])
 				return ZZRaiseErrorNo(error, ZZCentralFileHeaderWriteErrorCode, @{NSUnderlyingErrorKey : underlyingError, ZZEntryIndexKey : @(index)});
 		
 		endOfCentralDirectory.sizeOfTheCentralDirectory = [temporaryChannelOutput offset] + initialSkip
-			- endOfCentralDirectory.offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber;
+		- endOfCentralDirectory.offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber;
 		endOfCentralDirectory.zipFileCommentLength = 0;
 		
 		// write out the end of central directory
@@ -250,7 +275,7 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 		if (!channelOutput)
 			return ZZRaiseErrorNo(error, ZZReplaceWriteErrorCode, @{NSUnderlyingErrorKey : underlyingError});
 		ZZScopeGuard channelOutputCloser(^{[channelOutput close];});
-
+		
 		NSData* channelInput = [temporaryChannel newInput:&underlyingError];
 		if (!channelInput
 			|| ![channelOutput seekToOffset:initialSkip
