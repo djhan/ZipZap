@@ -138,12 +138,14 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 		
 		if (endOfCentralDirectory == endRangeEndOfCentralDirectory) {
 			NSLog(@"ZipZap>ZZArchive>loadCanMiss: central directory signature 발견 실패");
+			return ZZRaiseErrorNo(error, ZZEndOfCentralDirectoryReadErrorCode, nil); //즉시 에러값을 리턴시킨다 <- 밑에서 치명적 에러 발생 가능성 있음
 		}
 		if (beginContent
 			+ endOfCentralDirectoryRecord->offsetOfStartOfCentralDirectoryWithRespectToTheStartingDiskNumber
 			+ endOfCentralDirectoryRecord->totalNumberOfEntriesInTheCentralDirectory * sizeof(ZZCentralFileHeader)
 			> endOfCentralDirectory) {
 			NSLog(@"ZipZap>ZZArchive>loadCanMiss: central directory occurs before end of central directory, and has enough minimal space for the given entries");
+			return ZZRaiseErrorNo(error, ZZEndOfCentralDirectoryReadErrorCode, nil); //즉시 에러값을 리턴시킨다 <- 밑에서 치명적 에러 발생 가능성 있음
 		}
 		//2018/01/22 수정
 		//전체 길이가 central directory의 끝보다 작은 경우에만 에러 발생
@@ -157,6 +159,7 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 			 NSLog(@"ZipZap>ZZArchive>loadCanMiss: sizeof(ZZEndOfCentralDirectory) = %lu", sizeof(ZZEndOfCentralDirectory));
 			 NSLog(@"ZipZap>ZZArchive>loadCanMiss: endOfCentralDirectoryRecord->zipFileCommentLength = %i", endOfCentralDirectoryRecord->zipFileCommentLength);*/
 			NSLog(@"ZipZap>ZZArchive>loadCanMiss: end of central directory occurs at actual end of the zip");
+			return ZZRaiseErrorNo(error, ZZEndOfCentralDirectoryReadErrorCode, nil); //즉시 에러값을 리턴시킨다 <- 밑에서 치명적 에러 발생 가능성 있음
 		}
 		
 		return ZZRaiseErrorNo(error, ZZEndOfCentralDirectoryReadErrorCode, nil);
