@@ -174,7 +174,9 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 		// sanity check:
 		if (
 			// correct signature
-			nextCentralFileHeader->sign != ZZCentralFileHeader::sign
+			//nextCentralFileHeader->sign != ZZCentralFileHeader::sign
+			// 2020/09/17 수정
+			nextCentralFileHeader->signature != ZZCentralFileHeader::sign
 			// single disk zip
 			|| nextCentralFileHeader->diskNumberStart != 0
 			// local file occurs before first central file header, and has enough minimal space for at least local file
