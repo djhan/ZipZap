@@ -175,7 +175,9 @@ static const size_t ENDOFCENTRALDIRECTORY_MINSEARCH = sizeof(ZZEndOfCentralDirec
 		if (
 			// correct signature
 			//nextCentralFileHeader->sign != ZZCentralFileHeader::sign
+			
 			// 2020/09/17 수정
+			// "self-comparison always evaluates to false" 에러에 대한 대책. 아무래도 sign이 아니라 signature가 맞는 것으로 보인다
 			nextCentralFileHeader->signature != ZZCentralFileHeader::sign
 			// single disk zip
 			|| nextCentralFileHeader->diskNumberStart != 0
