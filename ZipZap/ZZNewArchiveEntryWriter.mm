@@ -178,7 +178,7 @@ namespace ZZDataConsumer
 
 - (BOOL)writeLocalFileToChannelOutput:(id<ZZChannelOutput>)channelOutput
 					  withInitialSkip:(uint32_t)initialSkip
-								error:(out NSError* __autoreleasing *)error //수정 발생
+								error:(out NSError* __autoreleasing _Nullable *)error //수정 발생
 {
 	ZZCentralFileHeader* centralFileHeader = [self centralFileHeader];
 	
@@ -235,7 +235,10 @@ namespace ZZDataConsumer
 					}
 					if (bad)
 					{
-						*error = err;
+						// 수정 처리
+						if (err && !*error) {
+							*error = err;
+						}
 						return NO;
 					}
 					
@@ -279,7 +282,10 @@ namespace ZZDataConsumer
 				
 				if (bad)
 				{
-					*error = err;
+					// 수정 처리
+					if (err && !*error) {
+						*error = err;
+					}
 					return NO;
 				}
 			}
